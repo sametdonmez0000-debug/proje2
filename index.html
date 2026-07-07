@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Barkod Saha Kontrol - Sesli Çift Motor</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.2/dist/quagga.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+  <style>
+    :root{
+      --bg:#0f172a; --card:#111827; --card2:#1f2937; --text:#f8fafc; --muted:#cbd5e1;
+      --green:#16a34a; --red:#dc2626; --yellow:#eab308; --blue:#2563eb; --orange:#f97316;
+      --border:#334155;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0f172a,#111827);color:var(--text);padding:14px;}
+    .wrap{max-width:1100px;margin:auto}
+    h1{font-size:24px;margin:8px 0 4px}
+    .sub{color:var(--muted);font-size:14px;margin-bottom:12px;line-height:1.45}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:860px){.grid{grid-template-columns:1fr 1fr}.full{grid-column:1 / -1}}
+    .card{background:rgba(17,24,39,.92);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:0 10px 26px rgba(0,0,0,.22)}
+    label{display:block;font-weight:bold;font-size:14px;margin:10px 0 6px;color:#e5e7eb}
+    input,select,button,textarea{width:100%;padding:12px;border-radius:12px;border:1px solid var(--border);font-size:16px;background:#0b1220;color:var(--text);}
+    input[type=file]{background:#0b1220}
+    button{border:0;font-weight:bold;cursor:pointer;transition:.15s transform,.15s opacity;margin-top:8px}
+    button:active{transform:scale(.99)}
+    button:disabled{opacity:.45;cursor:not-allowed}
+    .btn-blue{background:var(--blue)} .btn-green{background:var(--green)} .btn-red{background:var(--red)}
+    .btn-yellow{background:var(--yellow);color:#111827}.btn-orange{background:var(--orange)} .btn-dark{background:#374151}
+    .row{display:grid;grid-template-columns:1fr;gap:8px}
+    @media(min-width:560px){.row.two{grid-template-columns:1fr 1fr}.row.three{grid-template-columns:1fr 1fr 1fr}}
+    .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}
+    @media(min-width:520px){.stats{grid-template-columns:repeat(4,1fr)}}
+    .stat{background:#0b1220;border:1px solid var(--border);border-radius:14px;padding:10px;text-align:center}
+    .stat .n{font-size:22px;font-weight:bold}.stat .t{font-size:12px;color:var(--muted);margin-top:3px}
+    #scannerBox{position:relative;min-height:310px;background:#050816;border:1px solid var(--border);border-radius:16px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+    #scannerVideo{width:100%;height:360px;object-fit:cover;background:#000;display:none}
+    #quaggaTarget{position:absolute;inset:0;display:none}
+    #quaggaTarget video,#quaggaTarget canvas{width:100%!important;height:100%!important;object-fit:cover!important;position:absolute;inset:0}
+    .scanLine{position:absolute;left:6%;right:6%;top:50%;height:2px;background:#22c55e;box-shadow:0 0 14px #22c55e;z-index:5}
+    .scanGuide{position:absolute;left:5%;right:5%;top:34%;height:32%;border:3px solid rgba(34,197,94,.9);border-radius:14px;box-shadow:0 0 0 999px rgba(0,0,0,.28);z-index:4;pointer-events:none}
+    .hint{font-size:13px;color:var(--muted);line-height:1.45;margin-top:8px}
+    .status{border-radius:14px;padding:12px;margin-top:10px;font-weight:bold;line-height:1.4;white-space:pre-wrap;background:#0b1220;border:1px solid var(--border)}
+    .ok{background:rgba(22,163,74,.18);border-color:#16a34a;color:#dcfce7}.bad{background:rgba(220,38,38,.18);border-color:#dc2626;color:#fee2e2}.warn{background:rgba(234,179,8,.18);border-color:#eab308;color:#fef9c3}.info{background:rgba(37,99,235,.18);border-color:#2563eb;color:#dbeafe}
+    table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px;overflow:hidden;border-radius:12px}
+    th,td{border-bottom:1px solid var(--border);padding:8px;text-align:left;vertical-align:top}
+    th{background:#0b1220;color:#e5e7eb;position:sticky;top:0}td{color:#e5e7eb}tbody tr:hover{background:#172033}
+    .tableWrap{max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:12px;margin-top:8px}
+    .pill{display:inline-block;border-radius:999px;padding:4px 8px;font-size:12px;font-weight:bold}.pill.ok{background:#16a34a;color:white}.pill.bad{background:#dc2626;color:white}.pill.warn{background:#eab308;color:#111827}.pill.info{background:#2563eb;color:white}
+    .small{font-size:12px;color:var(--muted)}
+    .hidden{display:none!important}
+    .dangerText{color:#fecaca}.greenText{color:#bbf7d0}.yellowText{color:#fef08a}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📦 Barkod Saha Kontrol</h1>
+  <div class="sub">Excel listesindeki barkodları telefonda kamerayla tarar. Bu sürümde iki ayrı okuyucu motoru vardır: <b>Quagga</b> ve <b>ZXing</b>. Kamera açılıp okumuyorsa diğer motoru dene. Eşleşince onay sesi verir.</div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>1) Excel Dosyasını Yükle</h2>
+      <label>Excel dosyası seç (.xlsx, .xls, .csv)</label>
+      <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" />
+
+      <div class="row two">
+        <div>
+          <label>Sayfa</label>
+          <select id="sheetSelect" disabled></select>
+        </div>
+        <div>
+          <label>Barkod sütunu</label>
+          <select id="barcodeColumn" disabled></select>
+        </div>
+      </div>
+
+      <label><input type="checkbox" id="hasHeader" checked style="width:auto;vertical-align:middle;margin-right:6px"> İlk dolu satır başlık satırı</label>
+      <button class="btn-green" id="loadListBtn" disabled>Listeyi Sisteme Al</button>
+      <div id="excelStatus" class="status info">Henüz Excel yüklenmedi.</div>
+      <div class="hint">Barkodlar A sütunundaysa sütun olarak <b>Sütun A</b> veya başlık adı görünür. Barkodlarda baştaki 0 varsa Excel’de barkod sütununu metin formatında tut.</div>
+    </div>
+
+    <div class="card">
+      <h2>2) Kamera ile Tara</h2>
+      <div id="scannerBox">
+        <video id="scannerVideo" muted playsinline autoplay></video>
+        <div id="quaggaTarget"></div>
+        <div class="scanGuide"></div>
+        <div class="scanLine"></div>
+        <div id="cameraPlaceholder" class="small" style="padding:20px;text-align:center">Önce listeyi sisteme al, sonra okuyuculardan birini başlat.</div>
+      </div>
+
+      <div class="row two">
+        <button class="btn-orange" id="startQuaggaBtn" disabled>1D Barkod Okuyucu Başlat</button>
+        <button class="btn-blue" id="startZXingBtn" disabled>Alternatif ZXing Başlat</button>
+      </div>
+      <div class="row two">
+        <button class="btn-yellow" id="torchBtn" disabled>Fener Aç/Kapat</button>
+        <button class="btn-red" id="stopCameraBtn" disabled>Kamerayı Durdur</button>
+      </div>
+      <button class="btn-dark" id="snapshotBtn" disabled>Fotoğraf Çekip Oku</button>
+      <button class="btn-dark" id="soundToggleBtn">Ses: Açık</button>
+      <div id="scanStatus" class="status info">Kamera beklemede.</div>
+      <div class="hint">
+        <b>Önemli:</b> Trendyol/kargo etiketlerinde genelde <b>Code128</b> olur. Barkodu yatay tut, 20-40 cm mesafeden dene, parlama varsa telefonu hafif eğ. Çok yaklaştırırsan kamera netleyemez.
+      </div>
+    </div>
+
+    <div class="card full">
+      <h2>3) Manuel Kontrol</h2>
+      <div class="row two">
+        <input id="manualInput" placeholder="Barkodu elle yaz veya harici scanner ile okut" />
+        <button class="btn-green" id="manualBtn">Manuel Kontrol Et</button>
+      </div>
+      <div id="manualStatus" class="status info">Manuel kontrol hazır.</div>
+    </div>
+
+    <div class="card full">
+      <h2>Özet</h2>
+      <div class="stats">
+        <div class="stat"><div class="n" id="totalCount">0</div><div class="t">Listedeki Barkod</div></div>
+        <div class="stat"><div class="n greenText" id="foundCount">0</div><div class="t">Bulunan</div></div>
+        <div class="stat"><div class="n yellowText" id="repeatCount">0</div><div class="t">Tekrar</div></div>
+        <div class="stat"><div class="n dangerText" id="missingCount">0</div><div class="t">Listede Olmayan</div></div>
+      </div>
+      <div class="row three" style="margin-top:10px">
+        <button class="btn-blue" id="downloadFoundBtn" disabled>Bulunanları Excel İndir</button>
+        <button class="btn-yellow" id="downloadMissingListBtn" disabled>Kalanları Excel İndir</button>
+        <button class="btn-red" id="resetScanBtn">Tarama Sonuçlarını Sıfırla</button>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h2>Son Okutulanlar</h2>
+      <div class="tableWrap">
+        <table>
+          <thead><tr><th>Zaman</th><th>Barkod</th><th>Durum</th><th>Satır Bilgisi</th></tr></thead>
+          <tbody id="scanLogBody"><tr><td colspan="4" class="small">Henüz tarama yok.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h2>Liste Önizleme</h2>
+      <input id="searchInput" placeholder="Barkod veya ürün bilgisi ara" />
+      <div class="tableWrap">
+        <table>
+          <thead id="previewHead"></thead>
+          <tbody id="previewBody"><tr><td class="small">Liste yüklenmedi.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const excelFile = $('excelFile');
+  const sheetSelect = $('sheetSelect');
+  const barcodeColumn = $('barcodeColumn');
+  const hasHeader = $('hasHeader');
+  const loadListBtn = $('loadListBtn');
+  const excelStatus = $('excelStatus');
+  const scanStatus = $('scanStatus');
+  const manualStatus = $('manualStatus');
+  const video = $('scannerVideo');
+  const quaggaTarget = $('quaggaTarget');
+  const cameraPlaceholder = $('cameraPlaceholder');
+
+  let workbook = null;
+  let currentRows = [];
+  let headerRowIndex = 0;
+  let barcodeColIndex = 0;
+  let barcodeMap = new Map(); // normalized -> {raw,row,rowIndex,found,count}
+  let scanLogs = [];
+  let missingScans = [];
+  let zxingReader = null;
+  let activeStream = null;
+  let activeTrack = null;
+  let currentEngine = null;
+  let lastCode = '';
+  let lastCodeTime = 0;
+  let quaggaRunning = false;
+
+
+  // Ses sistemi: Telefonlarda sesin çalışması için kullanıcı etkileşimi gerekir.
+  // Kamera başlatma veya manuel kontrol gibi butonlara basınca AudioContext açılır.
+  let audioCtx = null;
+  let soundEnabled = true;
+
+  function unlockAudio() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!audioCtx) audioCtx = new Ctx();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) {}
+  }
+
+  function beep(freq = 880, duration = 120, delay = 0, volume = 0.16) {
+    if (!soundEnabled) return;
+    try {
+      unlockAudio();
+      if (!audioCtx) return;
+      const start = audioCtx.currentTime + delay;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(volume, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration / 1000);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + duration / 1000 + 0.03);
+    } catch (e) {}
+  }
+
+  function playScanSound(type) {
+    // ok: tek net onay sesi, warn: çift kısa ses, bad: düşük uyarı sesi
+    if (type === 'ok') {
+      beep(1046, 130, 0, 0.20);
+    } else if (type === 'warn') {
+      beep(740, 90, 0, 0.16);
+      beep(740, 90, 0.14, 0.16);
+    } else {
+      beep(220, 180, 0, 0.18);
+    }
+  }
+
+  function setStatus(el, msg, type='info') {
+    el.className = 'status ' + type;
+    el.textContent = msg;
+  }
+
+  function normalizeBarcode(v) {
+    if (v === null || v === undefined) return '';
+    let s = String(v).trim();
+    // Excel scientific notation cleanup: 1.2345E+12 gibi gelirse düz sayıya çevir
+    if (/^[0-9]+(\.[0-9]+)?e\+?[0-9]+$/i.test(s)) {
+      const n = Number(s);
+      if (Number.isFinite(n)) s = n.toFixed(0);
+    }
+    return s.replace(/[\s\-–—_]/g, '').toUpperCase();
+  }
+
+  function displayValue(v) {
+    if (v === null || v === undefined) return '';
+    return String(v);
+  }
+
+  function colName(i) {
+    let name = '';
+    i++;
+    while (i > 0) {
+      let rem = (i - 1) % 26;
+      name = String.fromCharCode(65 + rem) + name;
+      i = Math.floor((i - 1) / 26);
+    }
+    return name;
+  }
+
+  function findFirstUsefulRow(rows) {
+    for (let i=0; i<Math.min(rows.length, 20); i++) {
+      if ((rows[i] || []).some(c => String(c ?? '').trim() !== '')) return i;
+    }
+    return 0;
+  }
+
+  function getMaxCols(rows) {
+    let max = 0;
+    rows.forEach(r => { if (r && r.length > max) max = r.length; });
+    return max;
+  }
+
+  function likelyBarcodeColumn(rows, headerIndex, maxCols) {
+    const header = rows[headerIndex] || [];
+    const keywords = ['barkod','barcode','barcod','ean','kod','ürün kodu','urun kodu','sku','awb','tracking','kargo'];
+    for (let c=0; c<maxCols; c++) {
+      const h = String(header[c] ?? '').toLocaleLowerCase('tr-TR').trim();
+      if (keywords.some(k => h.includes(k))) return c;
+    }
+    // En çok barkod benzeri veri olan sütunu seç
+    let best = 0, bestScore = -1;
+    const start = hasHeader.checked ? headerIndex + 1 : headerIndex;
+    for (let c=0; c<maxCols; c++) {
+      let score = 0;
+      for (let r=start; r<Math.min(rows.length, start+40); r++) {
+        const s = normalizeBarcode(rows[r]?.[c]);
+        if (/^[A-Z0-9]{5,40}$/.test(s)) score++;
+        if (/^[0-9]{8,14}$/.test(s)) score += 2;
+      }
+      if (score > bestScore) { bestScore = score; best = c; }
+    }
+    return best;
+  }
+
+  function populateColumns() {
+    if (!currentRows.length) return;
+    headerRowIndex = findFirstUsefulRow(currentRows);
+    const maxCols = getMaxCols(currentRows);
+    barcodeColumn.innerHTML = '';
+    const header = currentRows[headerRowIndex] || [];
+    for (let c=0; c<maxCols; c++) {
+      const sample = displayValue(header[c]).trim();
+      const opt = document.createElement('option');
+      opt.value = String(c);
+      opt.textContent = sample ? `${sample} (Sütun ${colName(c)})` : `Sütun ${colName(c)}`;
+      barcodeColumn.appendChild(opt);
+    }
+    barcodeColIndex = likelyBarcodeColumn(currentRows, headerRowIndex, maxCols);
+    barcodeColumn.value = String(barcodeColIndex);
+    barcodeColumn.disabled = false;
+    loadListBtn.disabled = false;
+    renderPreview();
+  }
+
+  excelFile.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (typeof XLSX === 'undefined') {
+      setStatus(excelStatus, 'Excel okuma kütüphanesi yüklenemedi. İnternet bağlantını kontrol et ve sayfayı yenile.', 'bad');
+      return;
+    }
+    try {
+      setStatus(excelStatus, 'Excel okunuyor...', 'info');
+      const data = await file.arrayBuffer();
+      workbook = XLSX.read(data, { type: 'array', cellText: false, cellDates: false, raw: false });
+      sheetSelect.innerHTML = '';
+      workbook.SheetNames.forEach((name, idx) => {
+        const opt = document.createElement('option');
+        opt.value = name; opt.textContent = name;
+        sheetSelect.appendChild(opt);
+      });
+      sheetSelect.disabled = false;
+      loadSheet(workbook.SheetNames[0]);
+      setStatus(excelStatus, `Dosya yüklendi: ${file.name}\nSayfa ve barkod sütununu kontrol edip "Listeyi Sisteme Al" butonuna bas.`, 'ok');
+    } catch (err) {
+      console.error(err);
+      setStatus(excelStatus, 'Excel okunamadı. Dosyanın .xlsx/.xls/.csv olduğundan emin ol.', 'bad');
+    }
+  });
+
+  sheetSelect.addEventListener('change', () => loadSheet(sheetSelect.value));
+  hasHeader.addEventListener('change', () => { populateColumns(); });
+  barcodeColumn.addEventListener('change', () => { barcodeColIndex = Number(barcodeColumn.value); renderPreview(); });
+
+  function loadSheet(name) {
+    const ws = workbook.Sheets[name];
+    currentRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+    populateColumns();
+  }
+
+  loadListBtn.addEventListener('click', () => {
+    barcodeColIndex = Number(barcodeColumn.value);
+    headerRowIndex = findFirstUsefulRow(currentRows);
+    const start = hasHeader.checked ? headerRowIndex + 1 : headerRowIndex;
+    barcodeMap.clear();
+    for (let r=start; r<currentRows.length; r++) {
+      const row = currentRows[r] || [];
+      const raw = displayValue(row[barcodeColIndex]).trim();
+      const norm = normalizeBarcode(raw);
+      if (!norm) continue;
+      if (!barcodeMap.has(norm)) {
+        barcodeMap.set(norm, { raw, row, rowIndex: r+1, found:false, count:0 });
+      }
+    }
+    updateStats();
+    renderPreview();
+    const msg = `${barcodeMap.size} adet barkod sisteme alındı.\nŞimdi kamerayı başlatabilirsin.`;
+    setStatus(excelStatus, msg, barcodeMap.size ? 'ok' : 'warn');
+    $('startQuaggaBtn').disabled = barcodeMap.size === 0;
+    $('startZXingBtn').disabled = barcodeMap.size === 0;
+    $('downloadFoundBtn').disabled = barcodeMap.size === 0;
+    $('downloadMissingListBtn').disabled = barcodeMap.size === 0;
+  });
+
+  function rowSummary(row) {
+    if (!row) return '';
+    return row.slice(0, 6).map(displayValue).filter(Boolean).join(' | ');
+  }
+
+  function handleCode(rawCode, source='Kamera') {
+    const code = normalizeBarcode(rawCode);
+    if (!code) return;
+
+    const now = Date.now();
+    if (code === lastCode && now - lastCodeTime < 1500) return;
+    lastCode = code; lastCodeTime = now;
+
+    let type = 'bad', durum = 'Listede yok', detail = 'Bu barkod Excel listesinde bulunamadı.';
+    if (barcodeMap.has(code)) {
+      const item = barcodeMap.get(code);
+      item.count += 1;
+      if (!item.found) {
+        item.found = true;
+        type = 'ok'; durum = 'EŞLEŞTİ'; detail = `Bulundu. Excel satırı: ${item.rowIndex}\n${rowSummary(item.row)}`;
+      } else {
+        type = 'warn'; durum = 'TEKRAR OKUTULDU'; detail = `Bu barkod daha önce okutuldu. Tekrar sayısı: ${item.count}\nExcel satırı: ${item.rowIndex}`;
+      }
+    } else {
+      missingScans.push({ code, time: new Date().toLocaleString('tr-TR'), source });
+    }
+
+    scanLogs.unshift({time:new Date().toLocaleTimeString('tr-TR'), code, durum, detail, type, source});
+    if (scanLogs.length > 100) scanLogs.pop();
+    setStatus(scanStatus, `${source}: ${code}\n${durum}\n${detail}`, type);
+    setStatus(manualStatus, `${code}\n${durum}`, type);
+    updateStats();
+    renderLog();
+    renderPreview();
+    playScanSound(type);
+    if (navigator.vibrate) navigator.vibrate(type === 'ok' ? [80] : type === 'warn' ? [80,60,80] : [200]);
+  }
+
+  $('manualBtn').addEventListener('click', () => {
+    unlockAudio();
+    const v = $('manualInput').value;
+    if (!v.trim()) { setStatus(manualStatus, 'Manuel alana barkod yaz.', 'warn'); return; }
+    handleCode(v, 'Manuel');
+    $('manualInput').select();
+  });
+  $('manualInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') $('manualBtn').click();
+  });
+
+
+  $('soundToggleBtn').addEventListener('click', () => {
+    unlockAudio();
+    soundEnabled = !soundEnabled;
+    $('soundToggleBtn').textContent = soundEnabled ? 'Ses: Açık' : 'Ses: Kapalı';
+    if (soundEnabled) beep(880, 90, 0, 0.12);
+  });
+
+  async function stopAll() {
+    try { if (quaggaRunning && window.Quagga) { Quagga.stop(); Quagga.offDetected(onQuaggaDetected); } } catch(e) {}
+    quaggaRunning = false;
+    try { if (zxingReader) zxingReader.reset(); } catch(e) {}
+    zxingReader = null;
+    try { if (activeStream) activeStream.getTracks().forEach(t => t.stop()); } catch(e) {}
+    activeStream = null; activeTrack = null; currentEngine = null;
+    video.pause(); video.srcObject = null; video.style.display = 'none';
+    quaggaTarget.style.display = 'none';
+    quaggaTarget.innerHTML = '';
+    cameraPlaceholder.style.display = 'block';
+    $('torchBtn').disabled = true;
+    $('snapshotBtn').disabled = true;
+    $('stopCameraBtn').disabled = true;
+  }
+
+  async function startPreviewStream() {
+    const constraints = {
+      audio: false,
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        focusMode: { ideal: 'continuous' }
+      }
+    };
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    activeStream = stream;
+    activeTrack = stream.getVideoTracks()[0];
+    return stream;
+  }
+
+  function enableCameraButtons() {
+    $('stopCameraBtn').disabled = false;
+    $('snapshotBtn').disabled = false;
+    const caps = activeTrack?.getCapabilities ? activeTrack.getCapabilities() : {};
+    $('torchBtn').disabled = !caps.torch;
+  }
+
+  function onQuaggaDetected(data) {
+    const code = data?.codeResult?.code;
+    if (code) handleCode(code, '1D Okuyucu');
+  }
+
+  $('startQuaggaBtn').addEventListener('click', async () => {
+    unlockAudio();
+    if (typeof Quagga === 'undefined') {
+      setStatus(scanStatus, 'Quagga okuyucu yüklenemedi. İnternet bağlantını kontrol et, sayfayı yenile veya ZXing okuyucuyu dene.', 'bad');
+      return;
+    }
+    await stopAll();
+    currentEngine = 'quagga';
+    cameraPlaceholder.style.display = 'none';
+    quaggaTarget.style.display = 'block';
+    setStatus(scanStatus, '1D barkod okuyucu başlatılıyor...', 'info');
+    Quagga.init({
+      inputStream: {
+        name: 'Live', type: 'LiveStream', target: quaggaTarget,
+        constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        area: { top: '0%', right: '0%', left: '0%', bottom: '0%' }
+      },
+      locator: { patchSize: 'large', halfSample: false },
+      numOfWorkers: Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2)),
+      frequency: 12,
+      locate: true,
+      decoder: {
+        readers: [
+          'code_128_reader','ean_reader','ean_8_reader','upc_reader','upc_e_reader',
+          'code_39_reader','code_39_vin_reader','codabar_reader','i2of5_reader','2of5_reader','code_93_reader'
+        ],
+        multiple: false
+      }
+    }, function(err) {
+      if (err) {
+        console.error(err);
+        setStatus(scanStatus, '1D okuyucu kamera başlatamadı. Alternatif ZXing Başlat butonunu dene.\nHata: ' + (err.message || err), 'bad');
+        return;
+      }
+      Quagga.start();
+      quaggaRunning = true;
+      Quagga.onDetected(onQuaggaDetected);
+      $('stopCameraBtn').disabled = false;
+      $('snapshotBtn').disabled = false;
+      setStatus(scanStatus, '1D okuyucu çalışıyor. Barkodu yatay ve kutunun ortasına getir.', 'ok');
+    });
+  });
+
+  $('startZXingBtn').addEventListener('click', async () => {
+    unlockAudio();
+    if (typeof ZXing === 'undefined') {
+      setStatus(scanStatus, 'ZXing okuyucu yüklenemedi. İnternet bağlantını kontrol et ve sayfayı yenile.', 'bad');
+      return;
+    }
+    await stopAll();
+    currentEngine = 'zxing';
+    try {
+      setStatus(scanStatus, 'ZXing kamera başlatılıyor...', 'info');
+      cameraPlaceholder.style.display = 'none';
+      video.style.display = 'block';
+      const hints = new Map();
+      const formats = [
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.CODE_39,
+        ZXing.BarcodeFormat.CODE_93,
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
+        ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E,
+        ZXing.BarcodeFormat.ITF,
+        ZXing.BarcodeFormat.CODABAR,
+        ZXing.BarcodeFormat.QR_CODE,
+        ZXing.BarcodeFormat.DATA_MATRIX
+      ].filter(Boolean);
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      zxingReader = new ZXing.BrowserMultiFormatReader(hints, 250);
+      const stream = await startPreviewStream();
+      video.srcObject = stream;
+      await video.play();
+      enableCameraButtons();
+      zxingReader.decodeFromVideoElement(video, (result, err) => {
+        if (result) handleCode(result.getText(), 'ZXing');
+      });
+      setStatus(scanStatus, 'ZXing çalışıyor. Barkodu yavaşça ortala. Okumazsa Fotoğraf Çekip Oku butonunu dene.', 'ok');
+    } catch (err) {
+      console.error(err);
+      setStatus(scanStatus, 'ZXing kamera başlatamadı. Sayfanın HTTPS olduğundan ve kamera izni verdiğinden emin ol.\nHata: ' + (err.message || err), 'bad');
+      await stopAll();
+    }
+  });
+
+  $('snapshotBtn').addEventListener('click', async () => {
+    try {
+      if (currentEngine === 'quagga') {
+        // Quagga video elemanını bulup geçici canvas ile ZXing/BarcodeDetector dene
+        const qVideo = quaggaTarget.querySelector('video');
+        if (!qVideo) { setStatus(scanStatus, 'Fotoğraf için aktif video bulunamadı.', 'warn'); return; }
+        await decodeSnapshot(qVideo);
+      } else if (video.srcObject) {
+        await decodeSnapshot(video);
+      } else {
+        setStatus(scanStatus, 'Önce kamerayı başlat.', 'warn');
+      }
+    } catch (err) {
+      console.error(err);
+      setStatus(scanStatus, 'Fotoğraftan okuma başarısız. Barkodu biraz uzaklaştırıp tekrar dene.', 'bad');
+    }
+  });
+
+  async function decodeSnapshot(srcVideo) {
+    const canvas = document.createElement('canvas');
+    canvas.width = srcVideo.videoWidth || 1280;
+    canvas.height = srcVideo.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(srcVideo, 0, 0, canvas.width, canvas.height);
+
+    // Native BarcodeDetector varsa önce onu dene
+    if ('BarcodeDetector' in window) {
+      try {
+        const detector = new BarcodeDetector({ formats: ['code_128','code_39','code_93','ean_13','ean_8','upc_a','upc_e','itf','codabar','qr_code','data_matrix'] });
+        const detected = await detector.detect(canvas);
+        if (detected && detected[0]?.rawValue) {
+          handleCode(detected[0].rawValue, 'Fotoğraf');
+          return;
+        }
+      } catch(e) {}
+    }
+
+    // ZXing fotoğraf fallback
+    if (typeof ZXing !== 'undefined') {
+      const img = new Image();
+      img.src = canvas.toDataURL('image/png');
+      await new Promise(res => { img.onload = res; });
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      const reader = new ZXing.BrowserMultiFormatReader(hints);
+      try {
+        const result = await reader.decodeFromImageElement(img);
+        if (result) { handleCode(result.getText(), 'Fotoğraf'); return; }
+      } catch(e) {}
+    }
+    setStatus(scanStatus, 'Fotoğraftan barkod bulunamadı. Barkodu daha net, daha aydınlık ve tam yatay göster.', 'warn');
+  }
+
+  $('torchBtn').addEventListener('click', async () => {
+    try {
+      if (!activeTrack) {
+        const qVideo = quaggaTarget.querySelector('video');
+        const stream = qVideo?.srcObject;
+        activeTrack = stream?.getVideoTracks?.()[0] || null;
+      }
+      if (!activeTrack) { setStatus(scanStatus, 'Fener için aktif kamera bulunamadı.', 'warn'); return; }
+      const settings = activeTrack.getSettings ? activeTrack.getSettings() : {};
+      await activeTrack.applyConstraints({ advanced: [{ torch: !settings.torch }] });
+    } catch(err) {
+      setStatus(scanStatus, 'Bu telefon/tarayıcı fener kontrolünü desteklemiyor olabilir.', 'warn');
+    }
+  });
+
+  $('stopCameraBtn').addEventListener('click', async () => {
+    await stopAll();
+    setStatus(scanStatus, 'Kamera durduruldu.', 'info');
+  });
+
+  $('resetScanBtn').addEventListener('click', () => {
+    barcodeMap.forEach(v => { v.found = false; v.count = 0; });
+    scanLogs = []; missingScans = []; lastCode=''; lastCodeTime=0;
+    updateStats(); renderLog(); renderPreview();
+    setStatus(scanStatus, 'Tarama sonuçları sıfırlandı.', 'info');
+  });
+
+  function updateStats() {
+    let total = barcodeMap.size, found=0, repeats=0;
+    barcodeMap.forEach(v => { if (v.found) found++; if (v.count > 1) repeats += (v.count - 1); });
+    $('totalCount').textContent = total;
+    $('foundCount').textContent = found;
+    $('repeatCount').textContent = repeats;
+    $('missingCount').textContent = missingScans.length;
+  }
+
+  function renderLog() {
+    const body = $('scanLogBody');
+    body.innerHTML = '';
+    if (!scanLogs.length) {
+      body.innerHTML = '<tr><td colspan="4" class="small">Henüz tarama yok.</td></tr>'; return;
+    }
+    scanLogs.forEach(l => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${l.time}<br><span class="small">${l.source}</span></td><td><b>${escapeHtml(l.code)}</b></td><td><span class="pill ${l.type}">${escapeHtml(l.durum)}</span></td><td>${escapeHtml(l.detail).replace(/\n/g,'<br>')}</td>`;
+      body.appendChild(tr);
+    });
+  }
+
+  function renderPreview() {
+    const head = $('previewHead'); const body = $('previewBody');
+    head.innerHTML = ''; body.innerHTML = '';
+    if (!currentRows.length) { body.innerHTML = '<tr><td class="small">Liste yüklenmedi.</td></tr>'; return; }
+    const maxCols = Math.min(getMaxCols(currentRows), 8);
+    const headerIndex = findFirstUsefulRow(currentRows);
+    const header = currentRows[headerIndex] || [];
+    const trh = document.createElement('tr');
+    trh.innerHTML = '<th>Durum</th>' + Array.from({length:maxCols}, (_,c) => `<th>${escapeHtml(displayValue(header[c]) || 'Sütun '+colName(c))}</th>`).join('');
+    head.appendChild(trh);
+
+    const q = normalizeBarcode($('searchInput').value);
+    const start = hasHeader.checked ? headerIndex + 1 : headerIndex;
+    let shown = 0;
+    for (let r=start; r<currentRows.length && shown<80; r++) {
+      const row = currentRows[r] || [];
+      const norm = normalizeBarcode(row[barcodeColIndex]);
+      if (!norm) continue;
+      const joined = normalizeBarcode(row.join(' '));
+      if (q && !joined.includes(q)) continue;
+      const item = barcodeMap.get(norm);
+      const status = item?.found ? '<span class="pill ok">Bulundu</span>' : '<span class="pill info">Bekliyor</span>';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${status}</td>` + Array.from({length:maxCols}, (_,c) => `<td>${escapeHtml(displayValue(row[c]))}</td>`).join('');
+      body.appendChild(tr); shown++;
+    }
+    if (!shown) body.innerHTML = `<tr><td colspan="${maxCols+1}" class="small">Gösterilecek kayıt yok.</td></tr>`;
+  }
+  $('searchInput').addEventListener('input', renderPreview);
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+  }
+
+  function downloadXlsx(filename, rows) {
+    if (typeof XLSX === 'undefined') { alert('Excel kütüphanesi yüklenemedi.'); return; }
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Sonuc');
+    XLSX.writeFile(wb, filename);
+  }
+
+  $('downloadFoundBtn').addEventListener('click', () => {
+    const out = [['Barkod','Durum','Okutma Sayısı','Excel Satırı','Satır Bilgisi']];
+    barcodeMap.forEach((v, code) => { if (v.found) out.push([v.raw || code, 'Bulundu', v.count, v.rowIndex, rowSummary(v.row)]); });
+    downloadXlsx('bulunan_barkodlar.xlsx', out);
+  });
+
+  $('downloadMissingListBtn').addEventListener('click', () => {
+    const out = [['Barkod','Durum','Excel Satırı','Satır Bilgisi']];
+    barcodeMap.forEach((v, code) => { if (!v.found) out.push([v.raw || code, 'Kalan / Bulunmadı', v.rowIndex, rowSummary(v.row)]); });
+    if (missingScans.length) {
+      out.push([]); out.push(['Listede Olmayan Okutmalar']); out.push(['Barkod','Zaman','Kaynak']);
+      missingScans.forEach(m => out.push([m.code, m.time, m.source]));
+    }
+    downloadXlsx('kalan_ve_listede_olmayan_barkodlar.xlsx', out);
+  });
+
+  window.addEventListener('beforeunload', stopAll);
+})();
+</script>
+</body>
+</html>
