@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Barkod Saha Kontrol Sistemi - Stabil Kamera</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg: #f3f6fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #ff6600;
+      --primary-dark: #dd5700;
+      --good: #d1fae5;
+      --good-text: #065f46;
+      --bad: #fee2e2;
+      --bad-text: #991b1b;
+      --warn: #fef3c7;
+      --warn-text: #92400e;
+      --line: #e5e7eb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      background: linear-gradient(135deg, #111827, #374151);
+      color: white;
+      padding: 22px 16px;
+      text-align: center;
+    }
+
+    header h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+
+    header p {
+      margin: 0;
+      color: #d1d5db;
+      font-size: 14px;
+    }
+
+    .container {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+    }
+
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-7 { grid-column: span 7; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+
+    h2 {
+      font-size: 18px;
+      margin: 0 0 12px;
+    }
+
+    label {
+      display: block;
+      font-weight: bold;
+      margin: 12px 0 6px;
+      font-size: 14px;
+    }
+
+    input, select, button, textarea {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 10px;
+      border: 1px solid #d1d5db;
+      font-size: 15px;
+      background: white;
+    }
+
+    button {
+      border: 0;
+      background: var(--primary);
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    button:hover { background: var(--primary-dark); }
+    button.secondary { background: #374151; }
+    button.secondary:hover { background: #1f2937; }
+    button.danger { background: #dc2626; }
+    button.danger:hover { background: #b91c1c; }
+    button.success { background: #059669; }
+    button.success:hover { background: #047857; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .stat {
+      border-radius: 12px;
+      padding: 12px;
+      background: #f9fafb;
+      border: 1px solid var(--line);
+      text-align: center;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 24px;
+      margin-bottom: 4px;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    #reader {
+      width: 100%;
+      min-height: 280px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 2px dashed #d1d5db;
+      background: #111827;
+    }
+
+    .notice {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #eff6ff;
+      color: #1e40af;
+      font-size: 14px;
+      line-height: 1.45;
+      margin-top: 10px;
+    }
+
+    .status {
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      margin-top: 12px;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+    }
+
+    .status.good { background: var(--good); color: var(--good-text); }
+    .status.bad { background: var(--bad); color: var(--bad-text); }
+    .status.warn { background: var(--warn); color: var(--warn-text); }
+    .status.idle { background: #f3f4f6; color: #374151; }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      max-height: 440px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+      background: white;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #f9fafb;
+    }
+
+    tr.found { background: #ecfdf5; }
+    tr.missing { background: #fff7ed; }
+    tr.unmatched { background: #fef2f2; }
+
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .pill.good { background: var(--good); color: var(--good-text); }
+    .pill.bad { background: var(--bad); color: var(--bad-text); }
+    .pill.warn { background: var(--warn); color: var(--warn-text); }
+    .muted { color: var(--muted); font-size: 13px; }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 850px) {
+      .span-4, .span-5, .span-7, .span-8, .span-12 { grid-column: span 12; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .row { grid-template-columns: 1fr; }
+      header h1 { font-size: 21px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Barkod Saha Kontrol Sistemi - Stabil Kamera</h1>
+    <p>Excel dosyanı yükle, telefondan kamerayla okut, eşleşen ürünleri anında ayırt et.</p>
+  </header>
+
+  <main class="container">
+    <div class="grid">
+      <section class="card span-4">
+        <h2>1) Excel Dosyasını Yükle</h2>
+        <label for="excelFile">Excel dosyası (.xlsx, .xls, .csv)</label>
+        <input id="excelFile" type="file" accept=".xlsx,.xls,.csv" />
+
+        <label for="sheetSelect">Sayfa seç</label>
+        <select id="sheetSelect" disabled>
+          <option>Önce Excel yükleyin</option>
+        </select>
+
+        <label for="barcodeColumn">Barkod sütunu</label>
+        <select id="barcodeColumn" disabled>
+          <option>Önce Excel yükleyin</option>
+        </select>
+
+        <button id="loadSheetBtn" disabled>Listeyi Sisteme Al</button>
+        <button id="clearBtn" class="danger">Tüm Veriyi Temizle</button>
+
+        <div class="notice">
+          Excel’de başlık satırı varsa otomatik algılanır. Başlık yoksa sütunlar <b>Sütun A</b>, <b>Sütun B</b> diye açılır. Barkodlar hangi sütundaysa onu seç.
+        </div>
+      </section>
+
+      <section class="card span-8">
+        <h2>Durum Özeti</h2>
+        <div class="stats">
+          <div class="stat"><strong id="totalCount">0</strong><span>Exceldeki Barkod</span></div>
+          <div class="stat"><strong id="foundCount">0</strong><span>Bulunan</span></div>
+          <div class="stat"><strong id="leftCount">0</strong><span>Kalan</span></div>
+          <div class="stat"><strong id="unmatchedCount">0</strong><span>Listede Yok</span></div>
+        </div>
+        <div id="lastStatus" class="status idle">Excel dosyanı yükleyerek başla.</div>
+      </section>
+
+      <section class="card span-7">
+        <h2>2) Kamera ile Barkod Tara</h2>
+        <div id="reader"></div>
+        <div class="row">
+          <button id="startScanBtn" class="success" disabled>Kamerayı Başlat</button>
+          <button id="stopScanBtn" class="secondary" disabled>Kamerayı Durdur</button>
+        </div>
+        <div class="notice">
+          Telefon kamerası için siteyi <b>HTTPS</b> ile açmalısın. Android’de Chrome önerilir. iPhone’da Safari/Chrome deneyebilirsin.
+        </div>
+      </section>
+
+      <section class="card span-5">
+        <h2>Manuel Barkod Kontrol</h2>
+        <label for="manualBarcode">Barkodu elle gir</label>
+        <input id="manualBarcode" type="text" inputmode="numeric" placeholder="Örn: 8691234567890" />
+        <button id="manualCheckBtn" disabled>Kontrol Et</button>
+
+        <h2 style="margin-top:18px;">Barkod Bul Paneli</h2>
+        <label for="searchInput">Excel listesinde ara</label>
+        <input id="searchInput" type="text" placeholder="Barkod, ürün adı veya lokasyon ara" />
+        <button id="searchBtn" class="secondary" disabled>Ara</button>
+      </section>
+
+      <section class="card span-12">
+        <div class="row">
+          <div>
+            <h2>Okutma Geçmişi</h2>
+            <p class="muted">Eşleşen, tekrar okutulan ve listede olmayan barkodlar burada görünür.</p>
+          </div>
+          <div>
+            <button id="exportBtn" class="success" disabled>Sonucu Excel Olarak İndir</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="historyTable">
+            <thead>
+              <tr>
+                <th>Saat</th>
+                <th>Okutulan Barkod</th>
+                <th>Durum</th>
+                <th>Ürün Bilgisi</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card span-12">
+        <h2>Excel Listesi</h2>
+        <p class="muted">Bulunan ürünler yeşil görünür. Arama yaptığında filtrelenir.</p>
+        <div class="table-wrap">
+          <table id="masterTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const state = {
+      workbook: null,
+      sheetName: null,
+      rows: [],
+      headers: [],
+      barcodeColumn: null,
+      previewMatrix: [],
+      previewHeaderRowIndex: 0,
+      previewDataStartRowIndex: 0,
+      previewUsesHeader: false,
+      barcodeMap: new Map(),
+      foundSet: new Set(),
+      history: [],
+      html5QrCode: null,
+      scanning: false,
+      lastScan: { code: "", time: 0 }
+    };
+
+    const els = {
+      excelFile: document.getElementById("excelFile"),
+      sheetSelect: document.getElementById("sheetSelect"),
+      barcodeColumn: document.getElementById("barcodeColumn"),
+      loadSheetBtn: document.getElementById("loadSheetBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      totalCount: document.getElementById("totalCount"),
+      foundCount: document.getElementById("foundCount"),
+      leftCount: document.getElementById("leftCount"),
+      unmatchedCount: document.getElementById("unmatchedCount"),
+      lastStatus: document.getElementById("lastStatus"),
+      startScanBtn: document.getElementById("startScanBtn"),
+      stopScanBtn: document.getElementById("stopScanBtn"),
+      manualBarcode: document.getElementById("manualBarcode"),
+      manualCheckBtn: document.getElementById("manualCheckBtn"),
+      searchInput: document.getElementById("searchInput"),
+      searchBtn: document.getElementById("searchBtn"),
+      exportBtn: document.getElementById("exportBtn"),
+      historyBody: document.querySelector("#historyTable tbody"),
+      masterHead: document.querySelector("#masterTable thead"),
+      masterBody: document.querySelector("#masterTable tbody")
+    };
+
+    function normalizeBarcode(value) {
+      if (value === null || value === undefined) return "";
+      return String(value).trim().replace(/\s+/g, "").replace(/\.0$/, "");
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function setStatus(message, type = "idle") {
+      els.lastStatus.className = `status ${type}`;
+      els.lastStatus.textContent = message;
+    }
+
+    function vibrate(pattern) {
+      if (navigator.vibrate) navigator.vibrate(pattern);
+    }
+
+    function beep(type) {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.value = type === "good" ? 880 : type === "warn" ? 520 : 220;
+        gain.gain.value = 0.06;
+        oscillator.connect(gain);
+        gain.connect(audioCtx.destination);
+        oscillator.start();
+        setTimeout(() => {
+          oscillator.stop();
+          audioCtx.close();
+        }, 150);
+      } catch (e) {}
+    }
+
+    function rowSummary(row) {
+      if (!row) return "";
+      const keys = state.headers.filter(h => h !== state.barcodeColumn).slice(0, 5);
+      return keys.map(k => `<b>${escapeHtml(k)}:</b> ${escapeHtml(row[k])}`).join("<br>");
+    }
+
+    function updateStats() {
+      const total = state.barcodeMap.size;
+      const found = state.foundSet.size;
+      const unmatched = state.history.filter(h => h.statusKey === "unmatched").length;
+      els.totalCount.textContent = total;
+      els.foundCount.textContent = found;
+      els.leftCount.textContent = Math.max(total - found, 0);
+      els.unmatchedCount.textContent = unmatched;
+      els.exportBtn.disabled = state.rows.length === 0;
+    }
+
+    function renderMasterTable(filter = "") {
+      const q = filter.toLowerCase().trim();
+      if (!state.rows.length) {
+        els.masterHead.innerHTML = "";
+        els.masterBody.innerHTML = "";
+        return;
+      }
+
+      const shownHeaders = ["Durum", ...state.headers];
+      els.masterHead.innerHTML = `<tr>${shownHeaders.map(h => `<th>${escapeHtml(h)}</th>`).join("")}</tr>`;
+
+      const filteredRows = state.rows.filter(row => {
+        if (!q) return true;
+        return state.headers.some(h => String(row[h] ?? "").toLowerCase().includes(q));
+      });
+
+      els.masterBody.innerHTML = filteredRows.map(row => {
+        const code = normalizeBarcode(row[state.barcodeColumn]);
+        const found = state.foundSet.has(code);
+        const cells = state.headers.map(h => `<td>${escapeHtml(row[h])}</td>`).join("");
+        return `<tr class="${found ? "found" : "missing"}">
+          <td>${found ? '<span class="pill good">Bulundu</span>' : '<span class="pill warn">Bekliyor</span>'}</td>
+          ${cells}
+        </tr>`;
+      }).join("");
+    }
+
+    function renderHistory() {
+      els.historyBody.innerHTML = state.history.map(item => {
+        const pill = item.statusKey === "found"
+          ? '<span class="pill good">Eşleşti</span>'
+          : item.statusKey === "duplicate"
+            ? '<span class="pill warn">Tekrar</span>'
+            : '<span class="pill bad">Listede Yok</span>';
+        return `<tr class="${item.statusKey === "unmatched" ? "unmatched" : item.statusKey === "found" ? "found" : "missing"}">
+          <td>${escapeHtml(item.time)}</td>
+          <td>${escapeHtml(item.code)}</td>
+          <td>${pill}</td>
+          <td>${item.info || "-"}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    function saveLocal() {
+      const data = {
+        rows: state.rows,
+        headers: state.headers,
+        barcodeColumn: state.barcodeColumn,
+        found: [...state.foundSet],
+        history: state.history
+      };
+      localStorage.setItem("barkodSahaKontrol", JSON.stringify(data));
+    }
+
+    function loadLocal() {
+      try {
+        const raw = localStorage.getItem("barkodSahaKontrol");
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (!data.rows || !data.headers || !data.barcodeColumn) return;
+        state.rows = data.rows;
+        state.headers = data.headers;
+        state.barcodeColumn = data.barcodeColumn;
+        state.foundSet = new Set(data.found || []);
+        state.history = data.history || [];
+        rebuildMap();
+        enableWorkButtons();
+        renderMasterTable();
+        renderHistory();
+        updateStats();
+        setStatus("Önceki saha kontrol listen geri yüklendi.", "idle");
+      } catch (e) {}
+    }
+
+    function rebuildMap() {
+      state.barcodeMap.clear();
+      for (const row of state.rows) {
+        const code = normalizeBarcode(row[state.barcodeColumn]);
+        if (code && !state.barcodeMap.has(code)) state.barcodeMap.set(code, row);
+      }
+    }
+
+    function enableWorkButtons() {
+      const enabled = state.rows.length > 0;
+      els.startScanBtn.disabled = !enabled;
+      els.manualCheckBtn.disabled = !enabled;
+      els.searchBtn.disabled = !enabled;
+      els.exportBtn.disabled = !enabled;
+    }
+
+    function handleBarcode(rawCode, source = "camera") {
+      const now = Date.now();
+      const code = normalizeBarcode(rawCode);
+      if (!code) return;
+
+      if (source === "camera" && code === state.lastScan.code && now - state.lastScan.time < 1800) return;
+      state.lastScan = { code, time: now };
+
+      const time = new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const row = state.barcodeMap.get(code);
+
+      if (row) {
+        const alreadyFound = state.foundSet.has(code);
+        state.foundSet.add(code);
+        const statusKey = alreadyFound ? "duplicate" : "found";
+        const info = rowSummary(row);
+        state.history.unshift({ time, code, statusKey, info });
+
+        if (alreadyFound) {
+          setStatus(`TEKRAR OKUTULDU: ${code}`, "warn");
+          beep("warn");
+          vibrate([80, 70, 80]);
+        } else {
+          setStatus(`EŞLEŞTİ / BULUNDU: ${code}`, "good");
+          beep("good");
+          vibrate(120);
+        }
+      } else {
+        state.history.unshift({ time, code, statusKey: "unmatched", info: "Excel listesinde yok" });
+        setStatus(`LİSTEDE YOK: ${code}`, "bad");
+        beep("bad");
+        vibrate([200, 100, 200]);
+      }
+
+      renderHistory();
+      renderMasterTable(els.searchInput.value);
+      updateStats();
+      saveLocal();
+    }
+
+    els.excelFile.addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        if (!window.XLSX) {
+          setStatus("Excel okuma kütüphanesi yüklenemedi. İnternet açıkken sayfayı yenile.", "bad");
+          return;
+        }
+        const data = await file.arrayBuffer();
+        state.workbook = XLSX.read(data, { type: "array", cellDates: false });
+        if (!state.workbook.SheetNames.length) {
+          setStatus("Excel içinde sayfa bulunamadı.", "bad");
+          return;
+        }
+        els.sheetSelect.disabled = false;
+        els.sheetSelect.innerHTML = state.workbook.SheetNames.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+        state.sheetName = state.workbook.SheetNames[0];
+        prepareColumns();
+      } catch (error) {
+        console.error(error);
+        setStatus("Excel dosyası okunamadı. Dosya biçimini kontrol et veya dosyayı .xlsx olarak tekrar kaydet.", "bad");
+      }
+    });
+
+    els.sheetSelect.addEventListener("change", () => {
+      state.sheetName = els.sheetSelect.value;
+      prepareColumns();
+    });
+
+    function excelColumnName(index) {
+      let name = "";
+      let n = index + 1;
+      while (n > 0) {
+        const rem = (n - 1) % 26;
+        name = String.fromCharCode(65 + rem) + name;
+        n = Math.floor((n - 1) / 26);
+      }
+      return name;
+    }
+
+    function makeUniqueHeaders(rawHeaders, maxCols, usesHeader) {
+      const used = new Map();
+      const headers = [];
+      for (let i = 0; i < maxCols; i++) {
+        let base = usesHeader ? String(rawHeaders[i] ?? "").trim() : "";
+        if (!base) base = `Sütun ${excelColumnName(i)}`;
+        if (used.has(base)) {
+          const next = used.get(base) + 1;
+          used.set(base, next);
+          base = `${base} ${next}`;
+        } else {
+          used.set(base, 1);
+        }
+        headers.push(base);
+      }
+      return headers;
+    }
+
+    function detectHeaderRow(matrix) {
+      const firstNonEmptyIndex = matrix.findIndex(row => row.some(cell => String(cell ?? "").trim() !== ""));
+      if (firstNonEmptyIndex === -1) return { headerRowIndex: -1, usesHeader: false };
+
+      const headerWords = ["barkod", "barcode", "kod", "ürün", "urun", "lokasyon", "adres", "raf", "adet", "miktar", "sku", "model"];
+      for (let i = firstNonEmptyIndex; i < Math.min(matrix.length, firstNonEmptyIndex + 8); i++) {
+        const joined = matrix[i].map(cell => String(cell ?? "").toLocaleLowerCase("tr-TR")).join(" ");
+        if (headerWords.some(word => joined.includes(word))) {
+          return { headerRowIndex: i, usesHeader: true };
+        }
+      }
+
+      return { headerRowIndex: firstNonEmptyIndex, usesHeader: false };
+    }
+
+    function matrixToRows(matrix, headers, startIndex) {
+      const rows = [];
+      for (let r = startIndex; r < matrix.length; r++) {
+        const arr = matrix[r] || [];
+        const isEmpty = arr.every(cell => String(cell ?? "").trim() === "");
+        if (isEmpty) continue;
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = arr[i] ?? "");
+        rows.push(obj);
+      }
+      return rows;
+    }
+
+    function prepareColumns() {
+      if (!window.XLSX) {
+        els.barcodeColumn.disabled = true;
+        els.loadSheetBtn.disabled = true;
+        setStatus("Excel okuma kütüphanesi yüklenemedi. İnternet açıkken sayfayı yenile.", "bad");
+        return;
+      }
+
+      const sheet = state.workbook.Sheets[state.sheetName];
+      const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false, blankrows: false });
+      const detected = detectHeaderRow(matrix);
+
+      if (detected.headerRowIndex === -1) {
+        els.barcodeColumn.disabled = true;
+        els.loadSheetBtn.disabled = true;
+        els.barcodeColumn.innerHTML = "<option>Sütun bulunamadı</option>";
+        setStatus("Seçilen Excel sayfası boş görünüyor.", "bad");
+        return;
+      }
+
+      const maxCols = Math.max(...matrix.map(row => row.length));
+      const rawHeaders = matrix[detected.headerRowIndex] || [];
+      const headers = makeUniqueHeaders(rawHeaders, maxCols, detected.usesHeader);
+
+      state.previewMatrix = matrix;
+      state.previewHeaderRowIndex = detected.headerRowIndex;
+      state.previewDataStartRowIndex = detected.usesHeader ? detected.headerRowIndex + 1 : detected.headerRowIndex;
+      state.previewUsesHeader = detected.usesHeader;
+      state.headers = headers;
+
+      els.barcodeColumn.disabled = false;
+      els.loadSheetBtn.disabled = false;
+      els.barcodeColumn.innerHTML = headers.map(h => `<option value="${escapeHtml(h)}">${escapeHtml(h)}</option>`).join("");
+
+      const guess = headers.find(h => h.toLocaleLowerCase("tr-TR").includes("barkod") || h.toLocaleLowerCase("tr-TR").includes("barcode") || h.toLocaleLowerCase("tr-TR").includes("kod"));
+      if (guess) els.barcodeColumn.value = guess;
+      else els.barcodeColumn.value = headers[0];
+
+      const rowInfo = detected.usesHeader
+        ? `${headers.length} sütun bulundu. Başlık satırı otomatik algılandı.`
+        : `${headers.length} sütun bulundu. Başlık yok gibi algılandı; Sütun A/B/C olarak seçim yapabilirsin.`;
+      setStatus(rowInfo + " Barkod sütununu seçip listeyi sisteme al.", "idle");
+    }
+
+    els.loadSheetBtn.addEventListener("click", () => {
+      const barcodeColumn = els.barcodeColumn.value;
+      const rows = matrixToRows(state.previewMatrix, state.headers, state.previewDataStartRowIndex);
+      const cleanedRows = rows.filter(row => normalizeBarcode(row[barcodeColumn]));
+
+      if (!cleanedRows.length) {
+        setStatus("Seçtiğin sütunda barkod bulunamadı. Barkodların olduğu doğru sütunu seç.", "bad");
+        return;
+      }
+
+      state.rows = cleanedRows;
+      state.barcodeColumn = barcodeColumn;
+      state.foundSet.clear();
+      state.history = [];
+      rebuildMap();
+      enableWorkButtons();
+      renderMasterTable();
+      renderHistory();
+      updateStats();
+      saveLocal();
+
+      setStatus(`${state.barcodeMap.size} adet barkod sisteme alındı. Artık kamerayı başlatabilirsin.`, "good");
+    });
+
+    els.startScanBtn.addEventListener("click", async () => {
+      if (state.scanning) return;
+      if (!window.Html5Qrcode) {
+        setStatus("Barkod okuma kütüphanesi yüklenemedi. İnternet bağlantısını kontrol et.", "bad");
+        return;
+      }
+      try {
+        const formats = [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.CODE_93,
+          Html5QrcodeSupportedFormats.ITF
+        ].filter(Boolean);
+
+        state.html5QrCode = new Html5Qrcode("reader", { formatsToSupport: formats, verbose: false });
+
+        await state.html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 260, height: 170 },
+            aspectRatio: 1.777
+          },
+          decodedText => handleBarcode(decodedText, "camera"),
+          () => {}
+        );
+
+        state.scanning = true;
+        els.startScanBtn.disabled = true;
+        els.stopScanBtn.disabled = false;
+        setStatus("Kamera açık. Barkodu çerçevenin içine getir.", "idle");
+      } catch (error) {
+        setStatus("Kamera açılamadı. Site HTTPS mi, kamera izni verildi mi kontrol et.", "bad");
+      }
+    });
+
+    els.stopScanBtn.addEventListener("click", async () => {
+      if (!state.html5QrCode || !state.scanning) return;
+      try {
+        await state.html5QrCode.stop();
+        await state.html5QrCode.clear();
+      } catch (e) {}
+      state.scanning = false;
+      els.startScanBtn.disabled = state.rows.length === 0;
+      els.stopScanBtn.disabled = true;
+      setStatus("Kamera durduruldu.", "idle");
+    });
+
+    els.manualCheckBtn.addEventListener("click", () => {
+      handleBarcode(els.manualBarcode.value, "manual");
+      els.manualBarcode.value = "";
+      els.manualBarcode.focus();
+    });
+
+    els.manualBarcode.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !els.manualCheckBtn.disabled) els.manualCheckBtn.click();
+    });
+
+    els.searchBtn.addEventListener("click", () => renderMasterTable(els.searchInput.value));
+    els.searchInput.addEventListener("input", () => renderMasterTable(els.searchInput.value));
+
+    els.exportBtn.addEventListener("click", () => {
+      if (!state.rows.length) return;
+      const exportRows = state.rows.map(row => {
+        const code = normalizeBarcode(row[state.barcodeColumn]);
+        return {
+          Durum: state.foundSet.has(code) ? "Bulundu" : "Bulunmadı",
+          ...row
+        };
+      });
+
+      const unmatchedRows = state.history
+        .filter(h => h.statusKey === "unmatched")
+        .map(h => ({ Saat: h.time, Barkod: h.code, Durum: "Excel listesinde yok" }));
+
+      const historyRows = state.history.map(h => ({ Saat: h.time, Barkod: h.code, Durum: h.statusKey }));
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportRows), "Kontrol Sonucu");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(historyRows), "Okutma Geçmişi");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(unmatchedRows), "Listede Olmayanlar");
+      XLSX.writeFile(wb, `barkod_saha_kontrol_sonucu_${new Date().toISOString().slice(0,10)}.xlsx`);
+    });
+
+    els.clearBtn.addEventListener("click", async () => {
+      const ok = confirm("Tüm yüklenen liste ve okutma geçmişi silinsin mi?");
+      if (!ok) return;
+      if (state.html5QrCode && state.scanning) {
+        try { await state.html5QrCode.stop(); await state.html5QrCode.clear(); } catch (e) {}
+      }
+      localStorage.removeItem("barkodSahaKontrol");
+      state.workbook = null;
+      state.sheetName = null;
+      state.rows = [];
+      state.headers = [];
+      state.barcodeColumn = null;
+      state.previewMatrix = [];
+      state.previewHeaderRowIndex = 0;
+      state.previewDataStartRowIndex = 0;
+      state.previewUsesHeader = false;
+      state.barcodeMap.clear();
+      state.foundSet.clear();
+      state.history = [];
+      state.scanning = false;
+      els.sheetSelect.disabled = true;
+      els.sheetSelect.innerHTML = "<option>Önce Excel yükleyin</option>";
+      els.barcodeColumn.disabled = true;
+      els.barcodeColumn.innerHTML = "<option>Önce Excel yükleyin</option>";
+      els.loadSheetBtn.disabled = true;
+      els.startScanBtn.disabled = true;
+      els.stopScanBtn.disabled = true;
+      els.manualCheckBtn.disabled = true;
+      els.searchBtn.disabled = true;
+      els.exportBtn.disabled = true;
+      els.excelFile.value = "";
+      els.searchInput.value = "";
+      renderMasterTable();
+      renderHistory();
+      updateStats();
+      setStatus("Veriler temizlendi. Yeni Excel dosyası yükleyebilirsin.", "idle");
+    });
+
+    loadLocal();
+  </script>
+</body>
+</html>
