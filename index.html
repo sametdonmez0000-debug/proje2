@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Canlı Pixel Boyama</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #111827;
+      color: white;
+      text-align: center;
+    }
+
+    header {
+      padding: 20px;
+      background: #1f2937;
+    }
+
+    .panel {
+      margin: 20px auto;
+      background: #1f2937;
+      padding: 15px;
+      width: 90%;
+      max-width: 600px;
+      border-radius: 12px;
+    }
+
+    input[type="color"] {
+      width: 90px;
+      height: 50px;
+      border: none;
+      cursor: pointer;
+    }
+
+    #status {
+      margin-top: 10px;
+      color: #facc15;
+      font-size: 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(30, 18px);
+      gap: 2px;
+      justify-content: center;
+      margin: 20px auto;
+      padding-bottom: 30px;
+    }
+
+    .pixel {
+      width: 18px;
+      height: 18px;
+      background: white;
+      border: 1px solid #9ca3af;
+      cursor: pointer;
+    }
+
+    .pixel:hover {
+      border-color: yellow;
+      transform: scale(1.15);
+    }
+
+    @media (max-width: 700px) {
+      .grid {
+        grid-template-columns: repeat(30, 10px);
+      }
+
+      .pixel {
+        width: 10px;
+        height: 10px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <h1>Canlı Pixel Boyama</h1>
+    <p>Renk seç, piksele tıkla.</p>
+  </header>
+
+  <div class="panel">
+    <label>Renk Seç:</label><br><br>
+    <input type="color" id="colorPicker" value="#ff0000">
+    <div id="status">Pixel alanı hazır. Firebase bağlanıyor...</div>
+  </div>
+
+  <div id="pixelGrid" class="grid"></div>
+
+  <script>
+    const grid = document.getElementById("pixelGrid");
+    const colorPicker = document.getElementById("colorPicker");
+    const statusText = document.getElementById("status");
+
+    const gridSize = 30;
+    const totalPixels = gridSize * gridSize;
+
+    window.savePixelToFirebase = null;
+
+    for (let i = 0; i < totalPixels; i++) {
+      const pixel = document.createElement("div");
+      pixel.className = "pixel";
+      pixel.dataset.id = i;
+
+      pixel.addEventListener("click", function () {
+        const selectedColor = colorPicker.value;
+        pixel.style.backgroundColor = selectedColor;
+
+        if (window.savePixelToFirebase) {
+          window.savePixelToFirebase(i, selectedColor);
+        } else {
+          statusText.innerText = "Pixel boyandı ama Firebase henüz bağlanmadı.";
+        }
+      });
+
+      grid.appendChild(pixel);
+    }
+  </script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "SENIN_API_KEY_BURAYA",
+      authDomain: "pixel-99f00.firebaseapp.com",
+      databaseURL: "https://console.firebase.google.com/u/0/project/pixel-99f00/database/pixel-99f00-default-rtdb/data/~2F",
+      projectId: "pixel-99f00",
+      storageBucket: "pixel-99f00.firebasestorage.app",
+      messagingSenderId: "894234692943",
+      appId: "1:894234692943:web:c74c9ad3eb6c7ed252c93a",
+      measurementId: "G-CQ9K97ZT7C"
+    };
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      const db = getDatabase(app);
+
+      statusText.innerText = "Firebase bağlandı. Artık canlı pixel boyayabilirsin.";
+
+      window.savePixelToFirebase = async function (id, color) {
+        try {
+          await set(ref(db, "pixels/" + id), color);
+          statusText.innerText = "Pixel kaydedildi.";
+        } catch (error) {
+          statusText.innerText = "Firebase yazma hatası: " + error.message;
+          console.error(error);
+        }
+      };
+
+      onValue(ref(db, "pixels"), function (snapshot) {
+        const data = snapshot.val();
+
+        if (!data) return;
+
+        Object.keys(data).forEach(function (id) {
+          const pixel = document.querySelector('[data-id="' + id + '"]');
+          if (pixel) {
+            pixel.style.backgroundColor = data[id];
+          }
+        });
+      });
+
+    } catch (error) {
+      statusText.innerText = "Firebase bağlantı hatası: " + error.message;
+      console.error(error);
+    }
+  </script>
+
+</body>
+</html>
